@@ -1,0 +1,63 @@
+class constructScriptCustomPixelEvents {
+
+    constructor( name, args = false, event = null ) {
+        if( args ) {
+            this.name = name;
+            this.params = args;
+            this.event = event;
+        }
+    }
+
+    init() {
+        if( !this.hasOwnProperty( 'params' ) )
+            return false;
+        let params = this.params;
+        let eventName = this.name;
+        let args = this.getData( params );
+
+        fbq(
+            'trackCustom',
+            eventName,
+            args,
+            this.event
+        );
+    }
+
+    getData( data ) {
+        let fb_pixel_args = {};
+
+        if( data.content_ids && data.content_ids !== undefined )
+            fb_pixel_args['content_ids'] = data.content_ids;
+
+        if( data.content_ids !== "undefined" && data.quantity === undefined ) {
+            if( data.contents && data.contents !== undefined )
+                delete data.contents;
+        }
+
+        if( data.contents && data.contents !== undefined ){
+            fb_pixel_args['contents'] = data.contents;
+            delete fb_pixel_args['content_ids'];
+        }
+
+        if( data.content_type && data.content_type !== undefined )
+            fb_pixel_args['content_type'] = data.content_type;
+
+        if( data.content_name && data.content_name !== undefined )
+            fb_pixel_args['content_name'] = data.content_name;
+
+        if( data.content_category && data.content_category !== undefined )
+            fb_pixel_args['content_category'] = data.content_category;
+
+        if( data.product_category && data.product_category !== undefined )
+            fb_pixel_args['product_category'] = data.product_category;
+
+        if( data.price && data.price !== undefined )
+            fb_pixel_args['value'] = data.price;
+
+        if( data.currency && data.currency !== undefined )
+            fb_pixel_args['currency'] = data.currency;
+
+        return fb_pixel_args;
+
+    }
+}

@@ -1,0 +1,338 @@
+jQuery(function($) {
+    var upsellTheme = (function() {
+        var $this;
+        var upsellParams = [];
+        var hiddenBlocks = [];
+        var upsellTypes = {
+            'cart'     : 1,
+            'thankyou' : 3
+        };
+        var post_id = '';
+        var isMobile = jQuery(window).width() < 700;
+
+        return {
+            init: function() {
+                if ($this) {
+                    return ;
+                }
+
+                $this = this;
+                $this.setPostId();
+                $this.loadUpsell();
+            },
+            setPostId: function() {
+                post_id = $('#form_singleProduct').find('input[name="post_id"]').val();
+            },
+            loadUpsell: function() {
+                if (typeof alidAjax == 'undefined') {
+                    return false;
+                }
+
+                $.ajax({
+                    url: alidAjax.ajaxurl,
+                    data: {
+                        action  : 'upsell_action',
+                        post_id : post_id
+                    },
+                    type: "POST",
+                    dataType: 'json',
+                    success: function(response) {
+                        upsellParams = response;
+                        $this.addToCartInit();
+                    }
+                });
+            },
+            addToCartInit: function() {
+                $('body').on('cart:add', function(e) {
+                    if ($('#sidebar-upsell-mobile').hasClass('init_upsell')) {
+                       return false;
+                    }
+
+                    if ($('#sidebar-upsell').hasClass('opend')) {
+                        return false;
+                    }
+
+                    var params = $this.setUpsellParams(upsellTypes.cart);
+                    if (params.length == 0) {
+                        return false;
+                    }
+
+                    if (isMobile) {
+                        $.each(params, function(index, value) {
+                            if (typeof value !== 'undefined') {
+                                $this.renderMobile(value);
+                            }
+                        });
+                        $this.mobileUpsellInit();
+                    } else {
+                        console.log(params);
+                        $.each(params, function(index, value) {
+                            if (typeof value !== 'undefined') {
+                                $this.render(value);
+                            }
+                        });
+                        $this.upsellInit();
+                    }
+                });
+            },
+            setUpsellParams: function(upsellType) {
+                if (typeof upsellParams[upsellType] !== 'undefined') {
+                    var tempParams = [];
+                    $.each(upsellParams[upsellType], function(index, value) {
+                        if (typeof value !== 'undefined') {
+                            tempParams.push(value);
+                        }
+                    });
+                    return tempParams;
+                } else {
+                    return [];
+                }
+            },
+            render: function(value) {
+                $this.renderLayout(value['layout']);
+                $this.renderUpsell(value['template']);
+            },
+            renderLayout: function(template) {
+                console.log('render layout');
+                if ($('#sidebar-upsell').length == 0) {
+                    $('#cart-sidebar-overlay').after($(template));
+                    var widthSidebar = $('#cart-sidebar').width();
+                    $('#sidebar-upsell').addClass('opend')
+                        .css('width', widthSidebar - 160 + 'px')
+                        .css('right', widthSidebar + 'px')
+                        .css('margin-right', '0');
+                }
+
+                if ($('.sidebar-cart-content').find('.upsell-wrapper').length == 0) {
+                    $('.sidebar-cart-content').append('<div class="upsell-wrapper"></div>');
+                }
+            },
+            renderUpsell: function(upsell_template) {
+                var upsellLength = $('.sidebar-cart-content > .upsell-wrapper')
+                    .find('.product-upsell-content').length;
+                var hideUpsell = false;
+                if (upsellLength > 2) {
+                    hideUpsell = true;
+                }
+
+                if (hideUpsell) {
+                    $(upsell_template).hide()
+                        .prependTo($('.sidebar-cart-content')
+                        .find('.upsell-wrapper'));
+                } else {
+                    $('.sidebar-cart-content')
+                        .find('.upsell-wrapper')
+                        .prepend(upsell_template);
+                }
+            },
+            renderMobile: function(value) {
+                if (value['mobile_show'] == 1
+                    && isMobile
+                ) {
+                    $this.renderMobileLayout(value['layout_mobile']);
+                    $this.renderMobileUpsell(value['template_mobile']);
+                }
+            },
+            upsellInit: function() {
+                $('.sidebar-close-upsell-button').on('click', function() {
+                    $this.hideUpsell();
+                });
+
+                $('.upsell-add-button').on('click', function() {
+                    var variation = $(this).data('variation');
+                    var that = $(this);
+                    var upsellCart = {
+                        'post_id'  : $(this).data('post_id'),
+                        'quantity' : 1,
+                        'shipping' : $(this).data('shipping'),
+                        'title'    : ''
+                    };
+
+                    if (variation !== '') {
+                        upsellCart.variation = variation.split(';');
+                    }
+                    $this.swap($(this).data('post_id'));
+                    window.adsCart.add(upsellCart);
+                    if (!isMobile) {
+                        $(this).parents('.product-upsell-content')
+                            .fadeOut('slow', function() {
+                                $('.product-upsell-content:hidden').first()
+                                    .insertBefore($(this))
+                                    .fadeIn('slow');
+                                $(this).remove();
+                                $this.checkHideUpsell();
+                            }
+                        );
+                    }
+                });
+
+                $('.upsell-show-button').on('click', function() {
+                    $(this).parents('.product-upsell-content')
+                        .fadeOut('slow', function() {
+                            $('.product-upsell-content:hidden').first()
+                                .insertBefore($(this))
+                                .fadeIn('slow');
+                            $(this).remove();
+                            $this.checkHideUpsell();
+                        }
+                    );
+                });
+                $this.bindClick();
+            },
+            checkHideUpsell: function() {
+                if ($('.product-upsell-content').length == 0
+                    && !isMobile
+                ) {
+                    $this.hideUpsell();
+                }
+            },
+            bindClick: function() {
+                var that = this;
+                $(window).on('click', function(e) {
+                    if (e.target.id == 'cart-sidebar-overlay') {
+                        that.hideUpsell();
+                    }
+
+                    if (e.target.className == 'sidebar-close-upsell-button'
+                        || e.target.className == 'cart-close-btn'
+                    ) {
+                        that.hideUpsell();
+                    }
+                });
+            },
+            renderMobileLayout: function(template) {
+                if ($('#sidebar-upsell-mobile').length == 0) {
+                    $('#cart-sidebar').find('.cart-footer').append(template);
+                    $this.changeHeight();
+                }
+            },
+            renderMobileUpsell: function(upsell_template) {
+                if ($('#sidebar-cart-upsell-mobile').length == 1) {
+                    var mobileUpsellLength = $('#sidebar-cart-upsell-mobile').find('.product-mobile-upsell-content').length;
+                    if (mobileUpsellLength < 3) {
+                        $('#sidebar-cart-upsell-mobile').prepend(upsell_template);
+                        $('#sidebar-upsell-mobile').hide();
+                    } else {
+                        hiddenBlocks.push(upsell_template);
+                    }
+                }
+            },
+            mobileUpsellInit: function() {
+                var mobileSlick = $('.upsell-mobile-slick');
+                if ($('#sidebar-upsell-mobile').hasClass('init_upsell')) {
+                    return false;
+                }
+
+                $('#sidebar-upsell-mobile').addClass('init_upsell').show();
+                mobileSlick.off('init').on('init', function(event, slicker) {
+                    $('#sidebar-upsell-mobile')
+                        .css('display', 'block')
+                        .css('position', 'relative')
+                        .css('top', '100%')
+                        .css('transition', 'all .5s');
+                        setTimeout(function() {
+                            $('#sidebar-upsell-mobile').css('top', '0');
+                        }, 500);
+                }).slick({
+                    lazyLoad: 'ondemand',
+                    dots: true,
+                    infinite: true,
+                    speed: 300,
+                    slidesToShow: 1,
+                    adaptiveHeight: false
+                });
+                $this.addButtonInit();
+                $this.showButtonInit();
+            },
+            addButtonInit: function() {
+                $('.upsell-add-button').on('click', function() {
+                    var variation = $(this).data('variation');
+                    var that = $(this);
+                    var upsellCart = {
+                        'post_id'  : $(this).data('post_id'),
+                        'quantity' : 1,
+                        'shipping' : $(this).data('shipping'),
+                        'title'    : ''
+                    };
+
+                    if (variation !== '') {
+                        upsellCart.variation = variation.split(';');
+                    }
+
+                    if (isMobile) {
+                        $this.swapSlick(that.data('post_id'));
+                        window.adsCart.add(upsellCart);
+                    }
+                });
+            },
+            showButtonInit: function() {
+                $('.upsell-show-button').on('click', function() {
+                    var that = $(this);
+
+                    if (isMobile) {
+                        $this.swapSlick(that.data('post_id'));
+                    }
+                });
+            },
+            changeHeight: function() {
+                $('.cart-body').css('bottom', '370px');
+                $('.cart-footer').css('height', '370px');
+            },
+            swap: function(postId) {
+                $.each(upsellParams, function(index, item) {
+                    $.each(item, function(itemkey, value) {
+                        if (typeof value != 'undefined'
+                            && value.post_id == postId
+                        ) {
+                            upsellParams[index].splice(itemkey, 1);
+                        }
+                    });
+                });
+            },
+            swapSlick: function(postId) {
+                $this.swap(postId);
+                var slickKey = 0;
+                $('#sidebar-cart-upsell-mobile .slick-dots li').each(function(activeKey, value) {
+                    if ($(value).hasClass('slick-active')) {
+                        slickKey = activeKey;
+                    }
+                });
+
+                $('.upsell-mobile-slick').slick(
+                    'slickRemove',
+                    slickKey
+                );
+
+                var upsellBlock = hiddenBlocks.pop();
+                if (typeof upsellBlock !== 'undefined') {
+                    $('.upsell-mobile-slick').slick('slickAdd', upsellBlock);
+                }
+
+                if ($('.product-mobile-upsell-content').length == 1) {
+                    $('#sidebar-cart-upsell-mobile .slick-dots').remove();
+                }
+
+                if (typeof upsellBlock == 'undefined'
+                    && $('#sidebar-upsell-mobile').find('.product-mobile-upsell-content').length == 0
+                ) {
+                    $this.deleteUpsell();
+                }
+            },
+            hideUpsell: function() {
+                $('#sidebar-upsell').css('right', '0px')
+                    .css('margin-right', '-100%');
+            },
+            deleteUpsell: function() {
+                if (isMobile) {
+                    $('.upsell-mobile-slick').slick('unslick');
+                    $('#sidebar-upsell-mobile').find('#sidebar-cart-upsell-mobile').html('');
+                    $('#sidebar-upsell-mobile').remove();
+                    $('.cart-body').removeAttr('style');
+                    $('.cart-footer').removeAttr('style');
+                }
+            }
+        };
+    })();
+
+    upsellTheme.init();
+});
